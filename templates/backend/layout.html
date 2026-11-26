@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }} - Library Management System</title>
+    <!-- Google Fonts: Noto Sans TC & Roboto -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5.3 & Font Awesome 6 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        :root {
+            --sidebar-width: 268px;
+            --header-height: 60px;
+            --primary-bg: #1e293b;
+            --sidebar-hover: #334155;
+            --accent-color: #2563eb;
+        }
+        body {
+            font-family: 'Roboto', 'Noto Sans TC', sans-serif;
+            background-color: #f8fafc;
+            overflow-x: hidden;
+        }
+        /* Sidebar 樣式 */
+        .app-sidebar {
+            width: var(--sidebar-width);
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: var(--primary-bg);
+            color: #e2e8f0;
+            z-index: 1045;
+            transition: transform 0.25s ease-in-out;
+            overflow-y: auto;
+        }
+        .sidebar-brand {
+            height: var(--header-height);
+            display: flex;
+            align-items: center;
+            padding: 0 1.25rem;
+            font-weight: 700;
+            font-size: 1.05rem;
+            background-color: #0f172a;
+            color: #fff;
+            border-bottom: 1px solid #334155;
+        }
+        .nav-group-btn {
+            width: 100%;
+            text-align: left;
+            background: transparent;
+            border: none;
+            color: #cbd5e1;
+            padding: 0.65rem 1.25rem;
+            font-size: 0.92rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.2s;
+        }
+        .nav-group-btn:hover, .nav-group-btn.active {
+            background-color: var(--sidebar-hover);
+            color: #ffffff;
+        }
+        .nav-submenu {
+            background-color: #162032;
+            padding-left: 0;
+            list-style: none;
+        }
+        .nav-submenu a {
+            display: block;
+            padding: 0.5rem 1.25rem 0.5rem 2.75rem;
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: all 0.15s;
+        }
+        .nav-submenu a:hover, .nav-submenu a.active {
+            color: #ffffff;
+            background-color: rgba(37, 99, 235, 0.25);
+            border-left: 3px solid #3b82f6;
+        }
+        /* Header & Main Content */
+        .app-wrapper {
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: margin-left 0.25s ease-in-out;
+        }
+        .app-header {
+            height: var(--header-height);
+            background-color: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 0 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+        }
+        .app-main {
+            padding: 1.5rem;
+            flex: 1;
+        }
+        /* 統一狀態顏色規範 */
+        .status-badge-available { background-color: #dcfce7; color: #166534; border: 1px solid #86efac; }
+        .status-badge-borrowed  { background-color: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+        .status-badge-reserved  { background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .status-badge-overdue   { background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .status-badge-scrapped  { background-color: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+
+        /* 手機與平板 RWD 響應式 */
+        @media (max-width: 991.98px) {
+            .app-sidebar { transform: translateX(-100%); }
+            .app-sidebar.show { transform: translateX(0); }
+            .app-wrapper { margin-left: 0; }
+        }
+        .sidebar-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.5);
+            z-index: 1040;
+        }
+        .sidebar-backdrop.show { display: block; }
+    </style>
+</head>
+<body>
+    <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleSidebar()"></div>
+
+    <!-- 左側導覽列 Sidebar -->
+    <aside id="appSidebar" class="app-sidebar" aria-label="後台主選單">
+        <div class="sidebar-brand">
+            <i class="fa-solid fa-book-open-reader text-primary me-2"></i>
+            <span>Library Management</span>
+        </div>
+
+        <nav class="py-2">
+            <!-- 1. Dashboard -->
+            <a href="/admin/dashboard" class="nav-group-btn text-decoration-none {% if active_module == "dashboard" %}active{% endif %}">
+                <span><i class="fa-solid fa-gauge-high me-2 fa-fw"></i>Dashboard</span>
+            </a>
+
+            <!-- 2. 圖書管理 -->
+            <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#menu-books" aria-expanded="{% if active_module == "books" %}true{% else %}false{% endif %}">
+                <span><i class="fa-solid fa-book me-2 fa-fw"></i>圖書管理</span>
+                <i class="fa-solid fa-chevron-down small"></i>
+            </button>
+            <ul id="menu-books" class="nav-submenu collapse {% if active_module == "books" %}show{% endif %}">
+                <li><a href="/admin/books/list" class="{% if active_page == "books_list" %}active{% endif %}">圖書清單</a></li>
+                <li><a href="/admin/books/create" class="{% if active_page == "books_create" %}active{% endif %}">新增圖書</a></li>
+                <li><a href="/admin/books/categories" class="{% if active_page == "books_categories" %}active{% endif %}">圖書分類</a></li>
+                <li><a href="/admin/books/authors" class="{% if active_page == "books_authors" %}active{% endif %}">作者管理</a></li>
+                <li><a href="/admin/books/publishers" class="{% if active_page == "books_publishers" %}active{% endif %}">出版社管理</a></li>
+                <li><a href="/admin/books/copies" class="{% if active_page == "books_copies" %}active{% endif %}">館藏副本</a></li>
+            </ul>
+
+            <!-- 3. 讀者管理 -->
+            <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#menu-readers" aria-expanded="{% if active_module == "readers" %}true{% else %}false{% endif %}">
+                <span><i class="fa-solid fa-users me-2 fa-fw"></i>讀者管理</span>
+                <i class="fa-solid fa-chevron-down small"></i>
+            </button>
+            <ul id="menu-readers" class="nav-submenu collapse {% if active_module == "readers" %}show{% endif %}">
+                <li><a href="/admin/readers/list" class="{% if active_page == "readers_list" %}active{% endif %}">讀者清單</a></li>
+                <li><a href="/admin/readers/create" class="{% if active_page == "readers_create" %}active{% endif %}">新增讀者</a></li>
+                <li><a href="/admin/readers/cards" class="{% if active_page == "readers_cards" %}active{% endif %}">讀者證</a></li>
+                <li><a href="/admin/readers/history" class="{% if active_page == "readers_history" %}active{% endif %}">讀者借閱歷史</a></li>
+            </ul>
+
+            <!-- 4. 借閱管理 -->
+            <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#menu-circulation" aria-expanded="{% if active_module == "circulation" %}true{% else %}false{% endif %}">
+                <span><i class="fa-solid fa-right-left me-2 fa-fw"></i>借閱管理</span>
+                <i class="fa-solid fa-chevron-down small"></i>
+            </button>
+            <ul id="menu-circulation" class="nav-submenu collapse {% if active_module == "circulation" %}show{% endif %}">
+                <li><a href="/admin/circulation/checkout" class="{% if active_page == "circulation_checkout" %}active{% endif %}">圖書借出</a></li>
+                <li><a href="/admin/circulation/return" class="{% if active_page == "circulation_return" %}active{% endif %}">圖書歸還</a></li>
+                <li><a href="/admin/circulation/renew" class="{% if active_page == "circulation_renew" %}active{% endif %}">續借管理</a></li>
+                <li><a href="/admin/circulation/records" class="{% if active_page == "circulation_records" %}active{% endif %}">借閱紀錄</a></li>
+            </ul>
+
+            <!-- 5. 預約管理 -->
+            <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#menu-reservations" aria-expanded="{% if active_module == "reservations" %}true{% else %}false{% endif %}">
+                <span><i class="fa-solid fa-calendar-check me-2 fa-fw"></i>預約管理</span>
+                <i class="fa-solid fa-chevron-down small"></i>
+            </button>
+            <ul id="menu-reservations" class="nav-submenu collapse {% if active_module == "reservations" %}show{% endif %}">
+                <li><a href="/admin/reservations/list" class="{% if active_page == "reservations_list" %}active{% endif %}">預約清單</a></li>
+                <li><a href="/admin/reservations/waitlist" class="{% if active_page == "reservations_waitlist" %}active{% endif %}">候補清單</a></li>
+                <li><a href="/admin/reservations/notifications" class="{% if active_page == "reservations_notifications" %}active{% endif %}">預約通知</a></li>
+            </ul>
+
+            <!-- 6. 逾期管理 -->
+            <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#menu-overdue" aria-expanded="{% if active_module == "overdue" %}true{% else %}false{% endif %}">
+                <span><i class="fa-solid fa-clock-rotate-left me-2 fa-fw"></i>逾期管理</span>
+                <i class="fa-solid fa-chevron-down small"></i>
+            </button>
+            <ul id="menu-overdue" class="nav-submenu collapse {% if active_module == "overdue" %}show{% endif %}">
+                <li><a href="/admin/overdue/list" class="{% if active_page == "overdue_list" %}active{% endif %}">逾期清單</a></li>
+                <li><a href="/admin/overdue/fines" class="{% if active_page == "overdue_fines" %}active{% endif %}">罰款管理</a></li>
+                <li><a href="/admin/overdue/payments" class="{% if active_page == "overdue_payments" %}active{% endif %}">繳費紀錄</a></li>
+            </ul>
+
+            <!-- 7. 採購管理 -->
+            <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#menu-procurement" aria-expanded="{% if active_module == "procurement" %}true{% else %}false{% endif %}">
+                <span><i class="fa-solid fa-cart-shopping me-2 fa-fw"></i>採購管理</span>
+                <i class="fa-solid fa-chevron-down small"></i>
+            </button>
+            <ul id="menu-procurement" class="nav-submenu collapse {% if active_module == "procurement" %}show{% endif %}">
+                <li><a href="/admin/procurement/requests" class="{% if active_page == "procurement_requests" %}active{% endif %}">採購申請</a></li>
+                <li><a href="/admin/procurement/orders" class="{% if active_page == "procurement_orders" %}active{% endif %}">訂單管理</a></li>
+                <li><a href="/admin/procurement/receiving" class="{% if active_page == "procurement_receiving" %}active{% endif %}">入庫驗收</a></li>
+            </ul>
+
+            <!-- 8. 館藏盤點 -->
+            <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#menu-inventory" aria-expanded="{% if active_module == "inventory" %}true{% else %}false{% endif %}">
+                <span><i class="fa-solid fa-boxes-stacked me-2 fa-fw"></i>館藏盤點</span>
+                <i class="fa-solid fa-chevron-down small"></i>
+            </button>
+            <ul id="menu-inventory" class="nav-submenu collapse {% if active_module == "inventory" %}show{% endif %}">
+                <li><a href="/admin/inventory/audit" class="{% if active_page == "inventory_audit" %}active{% endif %}">盤點作業</a></li>
+                <li><a href="/admin/inventory/lost" class="{% if active_page == "inventory_lost" %}active{% endif %}">遺失管理</a></li>
+                <li><a href="/admin/inventory/scrap" class="{% if active_page == "inventory_scrap" %}active{% endif %}">報廢管理</a></li>
+            </ul>
+
+            <!-- 9. 報表分析 -->
+            <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#menu-reports" aria-expanded="{% if active_module == "reports" %}true{% else %}false{% endif %}">
+                <span><i class="fa-solid fa-chart-pie me-2 fa-fw"></i>報表分析</span>
+                <i class="fa-solid fa-chevron-down small"></i>
+            </button>
+            <ul id="menu-reports" class="nav-submenu collapse {% if active_module == "reports" %}show{% endif %}">
+                <li><a href="/admin/reports/circulation" class="{% if active_page == "reports_circulation" %}active{% endif %}">借閱統計</a></li>
+                <li><a href="/admin/reports/collection" class="{% if active_page == "reports_collection" %}active{% endif %}">館藏統計</a></li>
+                <li><a href="/admin/reports/readers" class="{% if active_page == "reports_readers" %}active{% endif %}">讀者統計</a></li>
+                <li><a href="/admin/reports/overdue" class="{% if active_page == "reports_overdue" %}active{% endif %}">逾期統計</a></li>
+            </ul>
+
+            <!-- 10. 系統設定 -->
+            <button class="nav-group-btn" data-bs-toggle="collapse" data-bs-target="#menu-settings" aria-expanded="{% if active_module == "settings" %}true{% else %}false{% endif %}">
+                <span><i class="fa-solid fa-gear me-2 fa-fw"></i>系統設定</span>
+                <i class="fa-solid fa-chevron-down small"></i>
+            </button>
+            <ul id="menu-settings" class="nav-submenu collapse {% if active_module == "settings" %}show{% endif %}">
+                <li><a href="/admin/settings/users" class="{% if active_page == "settings_users" %}active{% endif %}">使用者管理</a></li>
+                <li><a href="/admin/settings/roles" class="{% if active_page == "settings_roles" %}active{% endif %}">角色權限</a></li>
+                <li><a href="/admin/settings/rules" class="{% if active_page == "settings_rules" %}active{% endif %}">借閱規則</a></li>
+                <li><a href="/admin/settings/notifications" class="{% if active_page == "settings_notifications" %}active{% endif %}">通知設定</a></li>
+                <li><a href="/admin/settings/audit-logs" class="{% if active_page == "settings_audit_logs" %}active{% endif %}">操作紀錄</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- 右側主容器 Header + Main Content -->
+    <div class="app-wrapper">
+        <header class="app-header">
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-outline-secondary d-lg-none" type="button" onclick="toggleSidebar()" aria-label="切換選單">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="/admin/dashboard" class="text-decoration-none">首頁</a></li>
+                        <li class="breadcrumb-item text-muted">{{ module_label }}</li>
+                        <li class="breadcrumb-item active fw-semibold" aria-current="page">{{ page_title }}</li>
+                    </ol>
+                </nav>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <a href="/admin/circulation/checkout" class="btn btn-sm btn-primary d-none sm-inline-flex d-sm-inline-flex align-items-center">
+                    <i class="fa-solid fa-barcode me-1"></i>快速借還掃描
+                </a>
+                <div class="dropdown">
+                    <button class="btn btn-light btn-sm dropdown-toggle border" type="button" data-bs-toggle="dropdown">
+                        <i class="fa-solid fa-user-shield text-primary me-1"></i>館員控制台
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="/admin/settings/audit-logs">操作紀錄</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="/logout">登出系統</a></li>
+                    </ul>
+                </div>
+            </div>
+        </header>
+
+        <main class="app-main">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleSidebar() {
+            document.getElementById('appSidebar').classList.toggle('show');
+            document.getElementById('sidebarBackdrop').classList.toggle('show');
+        }
+
+        // 統一 Toast 回饋機制
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true
+        });
+
+        function showToast(icon, title) {
+            Toast.fire({ icon: icon, title: title });
+        }
+
+        // 刪除、報廢、停權二次確認規範
+        function confirmDangerAction(actionLabel, targetName, onConfirmCallback) {
+            Swal.fire({
+                title: `確定要執行「${actionLabel}」嗎？`,
+                html: `即將針對 <strong>${targetName}</strong> 執行${actionLabel}，此操作將記錄於系統稽核日誌。`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: `確認${actionLabel}`,
+                cancelButtonText: '取消',
+                reverseButtons: true
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    if (typeof onConfirmCallback === 'function') {
+                        onConfirmCallback();
+                    }
+                    showToast('success', `已完成${actionLabel}：${targetName}`);
+                }
+            });
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

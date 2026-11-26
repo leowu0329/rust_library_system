@@ -1,0 +1,270 @@
+{% extends "backend/layout.html" %}
+
+{% block content %}
+{% if let Some(msg) = flash_success %}
+<div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert" data-test="flash-success">
+    <i class="fa-solid fa-circle-check me-2"></i>{{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+{% if let Some(err) = flash_error %}
+<div class="alert alert-danger alert-dismissible fade show shadow-sm" role="alert" data-test="flash-error">
+    <i class="fa-solid fa-triangle-exclamation me-2"></i>{{ err }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<!-- 模式 A: Dashboard 儀表板 -->
+{% if view_mode == "dashboard" %}
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">總館藏副本數</div>
+                <div class="h3 fw-bold mb-0 text-dark">12,480</div>
+                <span class="badge status-badge-available mt-2">可借閱 10,920 冊</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">目前借出中</div>
+                <div class="h3 fw-bold mb-0 text-primary">1,342</div>
+                <span class="badge status-badge-borrowed mt-2">今日借出 86 冊</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">待取預約單</div>
+                <div class="h3 fw-bold mb-0 text-warning">185</div>
+                <span class="badge status-badge-reserved mt-2">保留中 42 冊</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="text-muted small mb-1">逾期未還案件</div>
+                <div class="h3 fw-bold mb-0 text-danger">33</div>
+                <span class="badge status-badge-overdue mt-2">需催還通知</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 模式 B: 借閱與歸還條碼掃描優先介面 -->
+{% if view_mode == "scanner" %}
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold"><i class="fa-solid fa-barcode text-primary me-2"></i>{{ page_title }}（條碼槍高速掃描模式）</h5>
+        <span class="badge bg-primary-subtle text-primary border border-primary-subtle">按 Enter 自動送出</span>
+    </div>
+    <div class="card-body p-4">
+        <form method="POST" action="{{ current_path }}" id="barcodeScannerForm" class="row g-3 needs-validation" novalidate>
+            {% if active_page == "circulation_checkout" %}
+            <div class="col-12 col-md-5">
+                <label for="readerBarcode" class="form-label fw-semibold">1. 讀者證條碼 <span class="text-danger">*</span></label>
+                <div class="input-group input-group-lg">
+                    <span class="input-group-text"><i class="fa-solid fa-id-card"></i></span>
+                    <input type="text" class="form-control" id="readerBarcode" name="reader_barcode"
+                           placeholder="請掃描讀者證條碼 (例: R-2026001)" required autofocus>
+                    <div class="invalid-feedback">請掃描或輸入有效的讀者證條碼</div>
+                </div>
+            </div>
+            {% endif %}
+            <div class="col-12 {% if active_page == "circulation_checkout" %}col-md-5{% else %}col-md-9{% endif %}">
+                <label for="bookBarcode" class="form-label fw-semibold">
+                    {% if active_page == "circulation_checkout" %}2. 圖書副本條碼{% else %}請掃描歸還圖書條碼{% endif %} <span class="text-danger">*</span>
+                </label>
+                <div class="input-group input-group-lg">
+                    <span class="input-group-text"><i class="fa-solid fa-barcode"></i></span>
+                    <input type="text" class="form-control" id="bookBarcode" name="book_barcode"
+                           placeholder="請掃描圖書條碼 (例: BK-000101)" required
+                           {% if active_page != "circulation_checkout" %}autofocus{% endif %}>
+                    <div class="invalid-feedback">請掃描或輸入有效的圖書副本條碼</div>
+                </div>
+            </div>
+            <div class="col-12 col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary btn-lg w-100">
+                    <i class="fa-solid fa-check me-1"></i>確認執行
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- 模式 C: 新增與編輯表單（含欄位驗證與錯誤提示） -->
+{% if view_mode == "form" %}
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold">{{ page_title }}</h5>
+    </div>
+    <div class="card-body p-4">
+        <form method="POST" action="{{ current_path }}" class="needs-validation" novalidate data-test="validated-form">
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label for="codeField" class="form-label fw-semibold">識別編號 / ISBN <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="codeField" name="code"
+                           placeholder="請輸入識別碼或 ISBN-13" required minlength="4">
+                    <div class="invalid-feedback">識別編號為必填欄位，且長度至少需 4 個字元。</div>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label for="titleField" class="form-label fw-semibold">名稱 / 標題 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="titleField" name="title"
+                           placeholder="請輸入完整名稱" required>
+                    <div class="invalid-feedback">請填寫名稱或標題，不可為空。</div>
+                </div>
+                <div class="col-12">
+                    <label for="remarkField" class="form-label fw-semibold">備註說明</label>
+                    <textarea class="form-control" id="remarkField" name="remark" rows="3" placeholder="選填項目"></textarea>
+                </div>
+            </div>
+            <div class="mt-4 d-flex gap-2 justify-content-end">
+                <a href="/admin/dashboard" class="btn btn-outline-secondary">返回</a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fa-solid fa-floppy-disk me-1"></i>儲存資料
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- 模式 D: 所有清單支援搜尋、排序、分頁、狀態色標與二次確認 -->
+{% if view_mode == "list" %}
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white py-3 d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <h5 class="mb-0 fw-bold">{{ page_title }}</h5>
+        <span class="text-muted small">共 {{ total_items }} 筆資料（第 {{ page }} / {{ total_pages }} 頁）</span>
+    </div>
+    <div class="card-body">
+        <!-- 搜尋與排序工具列 -->
+        <form method="GET" action="{{ current_path }}" class="row g-2 mb-3" data-test="list-filter-form">
+            <div class="col-12 col-md-5">
+                <div class="input-group">
+                    <span class="input-group-text bg-light"><i class="fa-solid fa-magnifying-glass"></i></span>
+                    <input type="search" class="form-control" name="q" value="{{ search_query }}"
+                           placeholder="搜尋編號、名稱、狀態關鍵字...">
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <select class="form-select" name="sort_by" aria-label="排序欄位">
+                    <option value="code" {% if sort_by == "code" %}selected{% endif %}>依編號排序</option>
+                    <option value="title" {% if sort_by == "title" %}selected{% endif %}>依名稱排序</option>
+                    <option value="status" {% if sort_by == "status" %}selected{% endif %}>依狀態排序</option>
+                    <option value="updated_at" {% if sort_by == "updated_at" %}selected{% endif %}>依更新時間排序</option>
+                </select>
+            </div>
+            <div class="col-6 col-md-2">
+                <select class="form-select" name="order" aria-label="排序方向">
+                    <option value="asc" {% if sort_order == "asc" %}selected{% endif %}>升冪 (A→Z)</option>
+                    <option value="desc" {% if sort_order == "desc" %}selected{% endif %}>降冪 (Z→A)</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-2">
+                <button type="submit" class="btn btn-primary w-100">套用查詢</button>
+            </div>
+        </form>
+
+        <!-- 響應式資料表格 -->
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" data-test="data-table">
+                <thead class="table-light">
+                    <tr>
+                        <th>編號</th>
+                        <th>項目名稱</th>
+                        <th>所屬分類 / 對象</th>
+                        <th>狀態標示</th>
+                        <th>最後更新</th>
+                        <th class="text-end">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if rows.is_empty() %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">查無符合條件的資料</td>
+                    </tr>
+                    {% else %}
+                    {% for item in rows %}
+                    <tr>
+                        <td class="fw-semibold font-monospace">{{ item.code }}</td>
+                        <td>{{ item.title }}</td>
+                        <td class="text-muted">{{ item.subtitle }}</td>
+                        <td>
+                            <span class="badge rounded-pill {{ item.status_css }}">{{ item.status_label }}</span>
+                        </td>
+                        <td class="small text-muted">{{ item.updated_at }}</td>
+                        <td class="text-end text-nowrap">
+                            <button type="button" class="btn btn-sm btn-outline-primary me-1"
+                                    onclick="showToast('info', '正在檢視：{{ item.title }}')">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    data-confirm-action="{{ danger_action_label }}"
+                                    onclick="confirmDangerAction('{{ danger_action_label }}', '{{ item.code }} - {{ item.title }}')">
+                                <i class="fa-solid fa-trash-can me-1"></i>{{ danger_action_label }}
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 分頁控制列 -->
+        <nav aria-label="清單分頁" class="mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="small text-muted">每頁顯示 {{ page_size }} 筆</div>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                    <a class="page-link" href="{{ current_path }}?q={{ search_query }}&sort_by={{ sort_by }}&order={{ sort_order }}&page={{ prev_page }}">上一頁</a>
+                </li>
+                <li class="page-item active"><span class="page-link">{{ page }}</span></li>
+                <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                    <a class="page-link" href="{{ current_path }}?q={{ search_query }}&sort_by={{ sort_by }}&order={{ sort_order }}&page={{ next_page }}">下一頁</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 啟用 HTML5 / Bootstrap 5 表單欄位驗證與錯誤提示
+    (() => {
+        'use strict';
+        const forms = document.querySelectorAll('.needs-validation');
+        Array.from(forms).forEach(form => {
+            form.addEventListener('submit', event => {
+                if (!form.checkValidity()) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    showToast('error', '表單欄位驗證未通過，請檢查紅色提示訊息');
+                }
+                form.classList.add('was-validated');
+            }, false);
+        });
+    })();
+
+    // 借閱頁面雙段條碼槍連續掃描：刷完讀者證後自動跳轉至圖書條碼欄位
+    const readerInput = document.getElementById('readerBarcode');
+    const bookInput = document.getElementById('bookBarcode');
+    if (readerInput && bookInput) {
+        readerInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && this.value.trim() !== '') {
+                e.preventDefault();
+                bookInput.focus();
+                showToast('info', '已讀取讀者證，請接著掃描圖書條碼');
+            }
+        });
+    }
+</script>
+{% endblock %}
