@@ -130,8 +130,11 @@ impl ProcurementService {
                     title: order.title.clone(),
                     author: order.author.clone(),
                     publisher: order.publisher.clone(),
+                    category: "未分類".to_string(),
+                    tags: Vec::new(),
                     total_copies: order.quantity,
                     available_copies: order.quantity,
+                    created_at: now,
                     updated_at: now,
                 };
                 let insert_res = book_coll.insert_one(new_book).await?;
