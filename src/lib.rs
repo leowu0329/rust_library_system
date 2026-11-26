@@ -4,39 +4,48 @@ pub mod middleware;
 pub mod models;
 pub mod services;
 
-use std::sync::Arc;
-
-use axum::{response::Redirect, routing::get, Router};
+use axum::{
+    response::Redirect,
+    routing::{get, post},
+    Router,
+};
+use handlers::{
+    admin_ui_handler::admin_ui_routes,
+    auth_handler::{switch_role, switch_view_mode},
+};
 use mongodb::Database;
+use services::extensibility_service::ExtensibilityService;
+use std::sync::Arc;
+use tower_sessions::{MemoryStore, SessionManagerLayer};
 
-use crate::handlers::admin_ui_handler::admin_ui_routes;
-
-/// 全域應用程式共享狀態
+/// 全域應用程式共享狀態（提供給 Axum 路由處理器與整合測試使用）
 #[derive(Clone)]
 pub struct AppState {
     pub db: Database,
+    pub extensibility: ExtensibilityService,
 }
 
 impl AppState {
-    /// 建立新的應用程式共享狀態實例
     pub fn new(db: Database) -> Self {
-        Self { db }
+        Self {
+            db,
+            extensibility: ExtensibilityService::new(),
+        }
     }
 }
 
-/// 建立主應用程式路由（根路徑 `/` 自動導向後台 Dashboard）
+/// 建立 Axum 應用程式路由實例（供 main.rs 與整合測試呼叫）
 pub fn create_app(db: Database) -> Router {
-    let shared_state = Arc::new(AppState { db });
+    let state = Arc::new(AppState::new(db));
+    let session_store = MemoryStore::default();
+    let session_layer = SessionManagerLayer::new(session_store).with_secure(false);
 
     Router::<Arc<AppState>>::new()
-        .with_state(shared_state)
-        .route("/", get(|| async { Redirect::temporary("/admin/dashboard") }))
+        .route("/", get(|| async { Redirect::to("/admin/dashboard") }))
+        .route("/health", get(|| async { "OK" }))
+        .route("/switch-mode", post(switch_view_mode))
+        .route("/switch-role", post(switch_role))
+        .with_state(state)
         .merge(admin_ui_routes())
-}
-
-/// 建立獨立後台 UX/UI 路由實例（供 `tests/ux_ui_workflow_test.rs` 快速測試使用）
-pub fn create_ux_ui_app() -> Router {
-    Router::new()
-        .route("/", get(|| async { Redirect::temporary("/admin/dashboard") }))
-        .merge(admin_ui_routes())
+        .layer(session_layer)
 }
