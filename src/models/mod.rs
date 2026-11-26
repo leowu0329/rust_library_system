@@ -7,3 +7,5 @@ pub mod operations;
 pub mod procurement;
 pub mod security;
 pub mod user;
+pub mod project_management;
+
