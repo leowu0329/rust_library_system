@@ -5,3 +5,4 @@ pub mod exception_handling;
 pub mod operations;
 pub mod procurement;
 pub mod user;
+pub mod security;
