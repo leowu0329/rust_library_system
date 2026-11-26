@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}採購與新書驗收入庫 - 圖書館管理系統{% endblock %}
+
+{% block content %}
+{% if user.view_mode == ViewMode::Frontend %}
+<!-- 前台視角提示卡片 -->
+<div class="alert alert-info shadow-sm d-flex align-items-center justify-content-between">
+    <div>
+        <i class="fa-solid fa-circle-info me-2"></i>
+        您目前處於<strong>前台讀者檢索模式</strong>。若需進行採購申請或新書驗收，請點擊右上角切換至後台。
+    </div>
+</div>
+{% else %}
+
+<!-- 標題與新增採購單按鈕 -->
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-1"><i class="fa-solid fa-cart-flatbed text-primary me-2"></i>採購申請與新書驗收入庫</h3>
+        <p class="text-muted mb-0">管理新書採購單、館長預算審核，以及驗收時自動編碼產生館藏複本條碼。</p>
+    </div>
+
+    {% if user.role == Role::Procurement || user.role == Role::LibrarianAdmin || user.role == Role::SuperAdmin %}
+    <button type="button" class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#createOrderModal">
+        <i class="fa-solid fa-plus me-1"></i>新增採購申請單
+    </button>
+    {% endif %}
+</div>
+
+<!-- 採購單列表卡片 -->
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">ISBN / 書名</th>
+                        <th>作者 / 出版社</th>
+                        <th class="text-center">數量</th>
+                        <th class="text-end">單價 (NTD)</th>
+                        <th class="text-center">狀態</th>
+                        <th>生成的館藏條碼</th>
+                        <th class="text-end pe-4">業務操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if orders.is_empty() %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="fa-solid fa-box-open fa-2x mb-2 d-block"></i>
+                            目前尚無採購紀錄，請點擊右上方「新增採購申請單」建立第一筆資料。
+                        </td>
+                    </tr>
+                    {% else %}
+                    {% for item in orders %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark">{{ item.title }}</div>
+                            <small class="text-muted"><i class="fa-solid fa-barcode me-1"></i>{{ item.isbn }}</small>
+                        </td>
+                        <td>
+                            <div>{{ item.author }}</div>
+                            <small class="text-muted">{{ item.publisher }}</small>
+                        </td>
+                        <td class="text-center fw-bold">{{ item.quantity }} 本</td>
+                        <td class="text-end">${{ item.unit_price }}</td>
+                        <td class="text-center">
+                            <span class="badge {{ item.status.badge_class() }}">{{ item.status.label() }}</span>
+                            {% match item.approver_name %}
+                            {% when Some with (approver) %}
+                            <div class="small text-muted mt-1">審核：{{ approver }}</div>
+                            {% when None %}
+                            {% endmatch %}
+                        </td>
+                        <td>
+                            {% if item.generated_barcodes.is_empty() %}
+                            <span class="text-muted small">尚未驗收編碼</span>
+                            {% else %}
+                            <div class="d-flex flex-wrap gap-1">
+                                {% for code in item.generated_barcodes %}
+                                <span class="badge bg-secondary barcode-badge">{{ code }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4">
+                            {% match item.id %}
+                            {% when Some with (oid) %}
+                            <!-- 狀態為 Pending：僅館長或超管可審核 -->
+                            {% if item.status == ProcurementStatus::Pending %}
+                            {% if user.role == Role::LibrarianAdmin || user.role == Role::SuperAdmin %}
+                            <button type="button" class="btn btn-sm btn-success me-1"
+                                onclick="openReviewModal('{{ oid }}', '{{ item.title }}', true)">
+                                <i class="fa-solid fa-check me-1"></i>核准
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                onclick="openReviewModal('{{ oid }}', '{{ item.title }}', false)">
+                                <i class="fa-solid fa-xmark me-1"></i>駁回
+                            </button>
+                            {% else %}
+                            <span class="text-muted small"><i class="fa-solid fa-clock me-1"></i>等待館長審核</span>
+                            {% endif %}
+                            {% endif %}
+
+                            <!-- 狀態為 Approved：採購人員、館長或超管可執行驗收入庫 -->
+                            {% if item.status == ProcurementStatus::Approved %}
+                            {% if user.role == Role::Procurement || user.role == Role::LibrarianAdmin || user.role ==
+                            Role::SuperAdmin %}
+                            <button type="button" class="btn btn-sm btn-primary" data-id="{{ oid }}"
+                                data-title="{{ item.title }}" data-qty="{{ item.quantity }}"
+                                onclick="openReceiveModal(this)">
+                                <i class="fa-solid fa-boxes-packing me-1"></i>驗收入庫
+                            </button>
+                            {% endif %}
+                            {% endif %}
+
+                            <!-- 狀態為 Received -->
+                            {% if item.status == ProcurementStatus::Received %}
+                            <span class="text-success small fw-medium"><i
+                                    class="fa-solid fa-circle-check me-1"></i>已完成入庫</span>
+                            {% endif %}
+                            {% when None %}
+                            {% endmatch %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 1：新增採購申請單 -->
+<div class="modal fade" id="createOrderModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form action="/admin/procurement/create" method="POST" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="fa-solid fa-file-circle-plus text-primary me-2"></i>建立新書採購單
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-medium">ISBN 國際標準書號</label>
+                    <input type="text" name="isbn" class="form-control" placeholder="例如：9789864345123" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-medium">書名</label>
+                    <input type="text" name="title" class="form-control" placeholder="例如：Rust 系統程式設計實戰" required>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-medium">作者</label>
+                        <input type="text" name="author" class="form-control" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-medium">出版社</label>
+                        <input type="text" name="publisher" class="form-control" required>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-medium">採購複本數量</label>
+                        <input type="number" name="quantity" class="form-control" min="1" max="50" value="3" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label fw-medium">預估單價 (NTD)</label>
+                        <input type="number" step="1" name="unit_price" class="form-control" min="0" value="580"
+                            required>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane me-1"></i>送出採購單</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal 2：館長審核二次確認視窗 -->
+<div class="modal fade" id="reviewOrderModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form id="reviewOrderForm" method="POST" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="reviewModalTitle">確認審核採購單</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="reviewModalBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="submit" id="reviewSubmitBtn" class="btn">確認送出</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal 3：驗收入庫與批量條碼生成視窗 -->
+<div class="modal fade" id="receiveOrderModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form id="receiveOrderForm" method="POST" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold"><i class="fa-solid fa-barcode text-primary me-2"></i>新書驗收與自動編碼入庫</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="receiveModalDesc" class="mb-3"></p>
+                <div class="mb-3">
+                    <label class="form-label fw-medium">指定上架館藏位置</label>
+                    <select name="location" class="form-select" required>
+                        <option value="一樓新書展示區">一樓新書展示區</option>
+                        <option value="二樓電腦資訊書庫">二樓電腦資訊書庫</option>
+                        <option value="三樓文學與社會科學區">三樓文學與社會科學區</option>
+                    </select>
+                </div>
+                <div class="alert alert-warning small mb-0">
+                    <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                    點擊確認後，系統將自動寫入書目主檔並批量產生對應數量的實體館藏條碼。
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="submit" class="btn btn-success"><i
+                        class="fa-solid fa-check-double me-1"></i>確認驗收入庫</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function openReviewModal(id, title, isApprove) {
+        const form = document.getElementById('reviewOrderForm');
+        const modalTitle = document.getElementById('reviewModalTitle');
+        const modalBody = document.getElementById('reviewModalBody');
+        const submitBtn = document.getElementById('reviewSubmitBtn');
+
+        if (isApprove) {
+            form.action = `/admin/procurement/${id}/approve`;
+            modalTitle.innerHTML = '<i class="fa-solid fa-circle-check text-success me-2"></i>核准採購申請';
+            modalBody.innerHTML = `確定要核准書籍《<strong>${title}</strong>》的採購申請嗎？核准後採購人員即可進行到貨驗收。`;
+            submitBtn.className = 'btn btn-success';
+            submitBtn.innerText = '確認核准';
+        } else {
+            form.action = `/admin/procurement/${id}/reject`;
+            modalTitle.innerHTML = '<i class="fa-solid fa-circle-xmark text-danger me-2"></i>駁回採購申請';
+            modalBody.innerHTML = `確定要駁回書籍《<strong>${title}</strong>》的採購申請嗎？`;
+            submitBtn.className = 'btn btn-danger';
+            submitBtn.innerText = '確認駁回';
+        }
+
+        new bootstrap.Modal(document.getElementById('reviewOrderModal')).show();
+    }
+
+    function openReceiveModal(btn) {
+        const id = btn.dataset.id;
+        const title = btn.dataset.title;
+        const qty = btn.dataset.qty;
+
+        const form = document.getElementById('receiveOrderForm');
+        const desc = document.getElementById('receiveModalDesc');
+
+        form.action = `/admin/procurement/${id}/receive`;
+        desc.innerHTML = `即將驗收《<strong>${title}</strong>》，系統將自動產生 <strong>${qty} 組</strong> 獨立館藏條碼並開放讀者借閱：`;
+
+        new bootstrap.Modal(document.getElementById('receiveOrderModal')).show();
+    }
+</script>
+{% endblock %}
